@@ -1,6 +1,6 @@
 {
-    "name": "terlinetbubblegun",
-    "short_name": "terlinetbubblegun",
+    "name": "TerlineT Bubble Gun",
+    "short_name": "Bubble Gun",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
