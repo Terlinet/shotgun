@@ -11,6 +11,16 @@ flutter pub get
 flutter run -d chrome
 ```
 
+## GitHub Pages
+
+O deploy é feito automaticamente pelo GitHub Actions ao enviar alterações para
+`main`. O site fica disponível em:
+
+https://terlinet.github.io/shotgun/
+
+Na primeira publicação, confirme em **Settings > Pages** que a origem está
+configurada como **GitHub Actions**.
+
 Para usar o reconhecimento de gestos, execute a versão Web em `localhost` ou
 HTTPS, clique em **Ativar gesto** e permita o acesso à câmera. O rastreamento
 MediaPipe é carregado do jsDelivr e requer conexão com a internet. O controle por
