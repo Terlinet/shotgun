@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   video_player: ^2.14.1
   web: ^1.1.2
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +61,10 @@ flutter:
     - assets/videos/gun-shoot.gif
     - assets/tirosemfundo.png
     - assets/videos/pepe.gif
+    - assets/tirosom.mp3
+    - assets/gritomale.mp3
+    - assets/picapau.mp3
+    - assets/pengurindo.gif
 
   # To add assets to your application, add an assets section, like this:
   # assets:

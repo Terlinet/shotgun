@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -37,6 +38,9 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
   late final VideoPlayerController _videoController;
   late final AnimationController _shotController;
   late final AnimationController _explosionController;
+  final AudioPlayer _shotAudioPlayer = AudioPlayer();
+  final AudioPlayer _targetAudioPlayer = AudioPlayer();
+  final AudioPlayer _laughAudioPlayer = AudioPlayer();
   final HandTrackingService _handTracking = HandTrackingService.instance;
   final Random _random = Random();
   Timer? _respawnTimer;
@@ -45,6 +49,7 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
   bool _cameraBusy = false;
   bool _targetVisible = true;
   bool _targetExploding = false;
+  bool _laughVisible = false;
   double _gunPosition = 0.5;
   double _targetPosition = 0.5;
   DateTime _lastShot = DateTime.fromMillisecondsSinceEpoch(0);
@@ -83,6 +88,9 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
     _shotController.dispose();
     _explosionController.dispose();
     _videoController.dispose();
+    _shotAudioPlayer.dispose();
+    _targetAudioPlayer.dispose();
+    _laughAudioPlayer.dispose();
     super.dispose();
   }
 
@@ -97,8 +105,7 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
       return;
     }
 
-    final triggerPulled =
-        pose.isPoking || (pose.isPinching && !_wasPinching);
+    final triggerPulled = pose.isPoking || (pose.isPinching && !_wasPinching);
     _wasPinching = pose.isPinching;
     final nextPosition = pose.x.clamp(0.0, 1.0);
     if ((_gunPosition - nextPosition).abs() > 0.002) {
@@ -114,17 +121,25 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
     if (now.difference(_lastShot).inMilliseconds < 350) return;
     _lastShot = now;
     final size = MediaQuery.sizeOf(context);
+    await _shotAudioPlayer.stop();
+    await _shotAudioPlayer.play(
+      AssetSource('tirosom.mp3'),
+      mode: PlayerMode.lowLatency,
+    );
     final gunWidth = min(280.0, size.width * 0.72);
     final targetWidth = min(150.0, size.width * 0.34);
-    final gunCenter = (_gunPosition * size.width)
-        .clamp(gunWidth / 2, size.width - gunWidth / 2);
-    final targetCenter = (_targetPosition * size.width)
-        .clamp(targetWidth / 2, size.width - targetWidth / 2);
+    final gunCenter = (_gunPosition * size.width).clamp(
+      gunWidth / 2,
+      size.width - gunWidth / 2,
+    );
+    final targetCenter = (_targetPosition * size.width).clamp(
+      targetWidth / 2,
+      size.width - targetWidth / 2,
+    );
     final hitTarget =
         _targetVisible &&
         !_targetExploding &&
-        (gunCenter - targetCenter).abs() <=
-            (gunWidth + targetWidth) / 2;
+        (gunCenter - targetCenter).abs() <= (gunWidth + targetWidth) / 2;
 
     setState(() => _isShooting = true);
     if (hitTarget) _explodeTarget();
@@ -133,9 +148,27 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
     if (mounted) setState(() => _isShooting = false);
   }
 
-  void _explodeTarget() {
+  Future<void> _explodeTarget() async {
+    await _targetAudioPlayer.stop();
+    final screamCompleted = _targetAudioPlayer.onPlayerComplete.first;
+    await _targetAudioPlayer.play(
+      AssetSource('gritomale.mp3'),
+      mode: PlayerMode.lowLatency,
+    );
     setState(() => _targetExploding = true);
     _explosionController.forward(from: 0);
+    await screamCompleted;
+    if (!mounted) return;
+
+    setState(() => _laughVisible = true);
+    await _laughAudioPlayer.stop();
+    final laughCompleted = _laughAudioPlayer.onPlayerComplete.first;
+    await _laughAudioPlayer.play(
+      AssetSource('picapau.mp3'),
+      mode: PlayerMode.lowLatency,
+    );
+    await laughCompleted;
+    if (mounted) setState(() => _laughVisible = false);
   }
 
   void _handleExplosionStatus(AnimationStatus status) {
@@ -180,10 +213,24 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
     final screenSize = MediaQuery.sizeOf(context);
     final gunWidth = min(280.0, screenSize.width * 0.72);
     final targetWidth = min(150.0, screenSize.width * 0.34);
-    final gunLeft = (_gunPosition * screenSize.width - gunWidth / 2)
-        .clamp(0.0, screenSize.width - gunWidth);
+    final gunLeft = (_gunPosition * screenSize.width - gunWidth / 2).clamp(
+      0.0,
+      screenSize.width - gunWidth,
+    );
     final targetLeft = (_targetPosition * screenSize.width - targetWidth / 2)
         .clamp(0.0, screenSize.width - targetWidth);
+    final aimCenter = (_gunPosition * screenSize.width).clamp(
+      gunWidth / 2,
+      screenSize.width - gunWidth / 2,
+    );
+    final targetCenter = (_targetPosition * screenSize.width).clamp(
+      targetWidth / 2,
+      screenSize.width - targetWidth / 2,
+    );
+    final isAimingAtTarget =
+        _targetVisible &&
+        !_targetExploding &&
+        (aimCenter - targetCenter).abs() <= (gunWidth + targetWidth) / 2;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -246,11 +293,104 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
                         fit: BoxFit.contain,
                       ),
                     )
-                  : Image.asset(
-                      'assets/videos/pepe.gif',
-                      fit: BoxFit.contain,
-                    ),
+                  : Image.asset('assets/videos/pepe.gif', fit: BoxFit.contain),
             ),
+          if (_laughVisible)
+            Positioned(
+              top: screenSize.height * 0.14,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Center(
+                  child: Image.asset(
+                    'assets/pengurindo.gif',
+                    width: min(220.0, screenSize.width * 0.55),
+                    height: min(220.0, screenSize.width * 0.55),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          Positioned(
+            left: aimCenter - 22,
+            top: screenSize.height * 0.28 + targetWidth / 2 - 22,
+            child: IgnorePointer(
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isAimingAtTarget
+                        ? Colors.greenAccent
+                        : Colors.white.withValues(alpha: 0.9),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.8),
+                      blurRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isAimingAtTarget
+                            ? Colors.greenAccent
+                            : Colors.white,
+                      ),
+                    ),
+                    Positioned(
+                      top: 3,
+                      child: Container(
+                        width: 2,
+                        height: 8,
+                        color: isAimingAtTarget
+                            ? Colors.greenAccent
+                            : Colors.white,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 3,
+                      child: Container(
+                        width: 2,
+                        height: 8,
+                        color: isAimingAtTarget
+                            ? Colors.greenAccent
+                            : Colors.white,
+                      ),
+                    ),
+                    Positioned(
+                      left: 3,
+                      child: Container(
+                        width: 8,
+                        height: 2,
+                        color: isAimingAtTarget
+                            ? Colors.greenAccent
+                            : Colors.white,
+                      ),
+                    ),
+                    Positioned(
+                      right: 3,
+                      child: Container(
+                        width: 8,
+                        height: 2,
+                        color: isAimingAtTarget
+                            ? Colors.greenAccent
+                            : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
           AnimatedPositioned(
             duration: const Duration(milliseconds: 90),
             curve: Curves.easeOut,
@@ -335,6 +475,65 @@ class _BubbleGunScreenState extends State<BubbleGunScreen>
                       : _handTracking.isActive.value
                       ? 'Câmera ativa'
                       : 'Ativar gesto',
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 24,
+            left: 24,
+            child: SafeArea(
+              child: IgnorePointer(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'T',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w100,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'E R L I N E',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w200,
+                        letterSpacing: 4,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'T',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w100,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
